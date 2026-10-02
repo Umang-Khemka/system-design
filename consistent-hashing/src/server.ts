@@ -58,6 +58,12 @@ class HashRing {
       console.log(`${position} → ${this.ring.get(position)}`);
     }
   }
+
+  removeServer(server: string): void {
+    const position = hash(server);
+
+    this.ring.delete(position);
+  }
 }
 
 const hashRing = new HashRing();
@@ -67,15 +73,42 @@ hashRing.addServer("server-1");
 hashRing.addServer("server-2");
 hashRing.printRing();
 
-console.log("user:123456789 →", hashRing.getServer("user:123456789"));
 console.log("user:123 →", hashRing.getServer("user:123"));
 console.log("user:456 →", hashRing.getServer("user:456"));
 console.log("user:789 →", hashRing.getServer("user:789"));
 
-// const servers = ["server-0", "server-1", "server-2"];
+// console.log("\nRemoving server-0...\n");
+// hashRing.removeServer("server-0");
+// console.log("user:123 →", hashRing.getServer("user:123"));
+// hashRing.printRing();
 
-// for (const server of servers) {
-//     console.log(server, hash(server));
-// }
+console.log("\n--- Key Movement Test ---");
 
-// console.log("user:123", hash("user:123"));
+const keys: string[] = [];
+
+for (let i = 0; i < 100; i++) {
+  keys.push(`user:${i}`);
+}
+
+// Store where each key goes before adding server-3
+const before = new Map<string, string>();
+
+for (const key of keys) {
+  before.set(key, hashRing.getServer(key));
+}
+
+
+hashRing.addServer("server-3");
+
+let moved = 0;
+
+for (const key of keys) {
+  const oldServer = before.get(key);
+  const newServer = hashRing.getServer(key);
+
+  if (oldServer !== newServer) {
+    moved++;
+  }
+}
+
+console.log(`Keys moved: ${moved}/${keys.length}`);
