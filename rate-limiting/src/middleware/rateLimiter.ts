@@ -1,28 +1,51 @@
-import {Request, Response, NextFunction} from 'express';
+import { Request, Response, NextFunction } from "express";
 import redis from "../services/redis.js";
+import ruleCache from "../services/ruleCache.js";
 
-export async function rateLimiter(req: Request, res: Response, next: NextFunction) {
-    const userId = req.headers['x-user-id'] as string;
-    if(!userId){
+const rateLimitScript = `
+local current = redis.call("INCR", KEYS[1])
+
+if current == 1 then
+    redis.call("EXPIRE", KEYS[1], ARGV[1])
+end
+
+return current
+`;
+
+export async function rateLimiter(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    const userId = req.headers["x-user-id"];
+
+    if (!userId || Array.isArray(userId)) {
         return res.status(400).json({
-            message: "User ID is not prvided",
+            message: "X-User-Id header is required"
         });
     }
-    console.log(`Rate limiting check for user: ${userId}`);
 
-    const key = `rate_limit:${userId}`;
+    const rule = ruleCache.get("default");
 
-    const count = await redis.incr(key);
-
-    if(count == 1){
-        await redis.expire(key, 60);
+    if (!rule) {
+        return res.status(503).json({
+            message: "Rate limit rules unavailable"
+        });
     }
 
-    console.log(`User ${userId} has made ${count} requests in the last minute.`);
+    const key = `rate-limit:${userId}`;
 
-    if(count > 5){
+    const count = await redis.eval(rateLimitScript, {
+        keys: [key],
+        arguments: [rule.windowSeconds.toString()]
+    }) as number;
+
+    console.log("User:", userId);
+    console.log("Request count:", count);
+
+    if (count > rule.limit) {
         return res.status(429).json({
-            message: "Too many requests. Please try again later.",
+            message: "Too many requests"
         });
     }
 

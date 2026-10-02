@@ -1,0 +1,6 @@
+{
+  "default": {
+    "limit": 5,
+    "windowSeconds": 60
+  }
+}
